@@ -51,14 +51,21 @@ const studentsTableBody = document.querySelector('#students-table tbody');
 const getStudentsBtn = document.getElementById('get-students-btn');
 const addStudentForm = document.getElementById('add-student-form');
 
-function getStudents() {
-    return new Promise(resolve => {
-        setTimeout(() => {
-            console.log("GET /students: Отримано дані.");
-            resolve(studentsData.students);
-        }, 500);
-    });
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+async function getStudents() {
+    try {
+        await delay(500);
+        console.log("GET /students: Отримано дані.");
+        return studentsData.students;
+    } catch (error) {
+        console.error("Помилка у getStudents:", error);
+        throw error;
+    }
+}
+
 function renderStudents(students) {
     studentsTableBody.innerHTML = ''; 
 
@@ -90,39 +97,44 @@ function renderStudents(students) {
         row.querySelector('.delete-btn').addEventListener('click', () => deleteStudent(student.id));
     });
 }
-function addStudent(e) {
+
+async function addStudent(e) {
     e.preventDefault();
 
-    const name = document.getElementById('name').value;
-    const age = parseInt(document.getElementById('age').value);
-    const course = document.getElementById('course').value;
-    const skills = document.getElementById('skills').value.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    const email = document.getElementById('email').value;
-    const isEnrolled = document.getElementById('isEnrolled').checked;
+    try {
+        const name = document.getElementById('name').value;
+        const age = parseInt(document.getElementById('age').value);
+        const course = document.getElementById('course').value;
+        const skills = document.getElementById('skills').value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        const email = document.getElementById('email').value;
+        const isEnrolled = document.getElementById('isEnrolled').checked;
 
-    const newStudent = {
-        id: Math.max(0, ...studentsData.students.map(s => s.id)) + 1, 
-        name,
-        age,
-        course,
-        skills,
-        email,
-        isEnrolled
-    };
-    new Promise(resolve => {
-        setTimeout(() => {
-            studentsData.students.push(newStudent);
-            console.log(`POST /students: Додано студента з ID ${newStudent.id}`);
-            resolve(newStudent);
-        }, 500);
-    })
-    .then(() => {
-        loadAndRenderStudents();
+        const newStudent = {
+            id: Math.max(0, ...studentsData.students.map(s => s.id)) + 1, 
+            name,
+            age,
+            course,
+            skills,
+            email,
+            isEnrolled
+        };
+
+        await delay(500);
+        
+        studentsData.students.push(newStudent);
+        console.log(`POST /students: Додано студента з ID ${newStudent.id}`);
+
+        await loadAndRenderStudents(); 
+        
         addStudentForm.reset();
         alert(`Студента ${name} успішно додано!`);
-    })
-    .catch(error => console.error('Помилка при додаванні студента:', error));
+
+    } catch (error) {
+        console.error('Помилка при додаванні студента:', error);
+        alert('Помилка при додаванні студента. Дивіться консоль.');
+    }
 }
+
 function handleUpdateStudentClick(student) {
     const row = studentsTableBody.querySelector(`tr[data-id="${student.id}"]`);
     if (!row) return;
@@ -144,7 +156,7 @@ function handleUpdateStudentClick(student) {
         </td>
     `;
     row.style.display = 'none';
-    updateRow.querySelector('.update-student-form').addEventListener('submit', (e) => {
+    updateRow.querySelector('.update-student-form').addEventListener('submit', async (e) => { // Додаємо async тут
         e.preventDefault();
         const formData = new FormData(e.target);
         const updatedData = {
@@ -156,66 +168,74 @@ function handleUpdateStudentClick(student) {
             email: formData.get('email'),
             isEnrolled: formData.get('isEnrolled') === 'on' ? true : false
         };
-        updateStudent(student.id, updatedData, row, updateRow);
+        await updateStudent(student.id, updatedData, row, updateRow); 
     });
     updateRow.querySelector('.cancel-update-btn').addEventListener('click', () => {
         updateRow.remove();
         row.style.display = 'table-row';
     });
 }
-function updateStudent(id, updatedData, originalRow, updateFormRow) {
-    const studentIndex = studentsData.students.findIndex(s => s.id === id);
+async function updateStudent(id, updatedData, originalRow, updateFormRow) {
+    try {
+        const studentIndex = studentsData.students.findIndex(s => s.id === id);
 
-    if (studentIndex === -1) {
-        alert('Студента не знайдено!');
-        return;
-    }
-    new Promise(resolve => {
-        setTimeout(() => {
-            studentsData.students[studentIndex] = { ...studentsData.students[studentIndex], ...updatedData };
-            console.log(`PATCH /students/${id}: Оновлено дані.`);
-            resolve(studentsData.students[studentIndex]);
-        }, 500);
-    })
-    .then(updatedStudent => {
-        loadAndRenderStudents(); 
+        if (studentIndex === -1) {
+            throw new Error('Студента не знайдено!');
+        }
+
+        await delay(500);
+        const updatedStudent = { ...studentsData.students[studentIndex], ...updatedData };
+        studentsData.students[studentIndex] = updatedStudent;
+        console.log(`PATCH /students/${id}: Оновлено дані.`);
+        
+        await loadAndRenderStudents(); 
+        
         alert(`Студента ${updatedStudent.name} (ID: ${id}) успішно оновлено!`);
-        updateFormRow.remove();
-    })
-    .catch(error => console.error(`Помилка при оновленні студента з ID ${id}:`, error));
+        updateFormRow.remove(); 
+        originalRow.style.display = 'table-row';
+
+    } catch (error) {
+        console.error(`Помилка при оновленні студента з ID ${id}:`, error);
+        alert(`Помилка при оновленні студента з ID ${id}: ${error.message}`);
+        if (updateFormRow) updateFormRow.remove();
+        if (originalRow) originalRow.style.display = 'table-row';
+    }
 }
-function deleteStudent(id) {
+
+async function deleteStudent(id) {
     if (!confirm(`Ви впевнені, що хочете видалити студента з ID ${id}?`)) {
         return;
     }
-    const studentIndex = studentsData.students.findIndex(s => s.id === id);
+    
+    try {
+        const studentIndex = studentsData.students.findIndex(s => s.id === id);
 
-    if (studentIndex === -1) {
-        alert('Студента не знайдено!');
-        return;
-    }
-    new Promise(resolve => {
-        setTimeout(() => {
-            const [deletedStudent] = studentsData.students.splice(studentIndex, 1);
-            console.log(`DELETE /students/${id}: Видалено.`);
-            resolve(deletedStudent);
-        }, 500);
-    })
-    .then((deletedStudent) => {
-        loadAndRenderStudents();
+        if (studentIndex === -1) {
+            throw new Error('Студента не знайдено!');
+        }
+
+        await delay(500);
+
+        const [deletedStudent] = studentsData.students.splice(studentIndex, 1);
+        console.log(`DELETE /students/${id}: Видалено.`);
+        
+        await loadAndRenderStudents();
+
         alert(`Студента ${deletedStudent.name} (ID: ${id}) успішно видалено!`);
-    })
-    .catch(error => console.error(`Помилка при видаленні студента з ID ${id}:`, error));
+
+    } catch (error) {
+        console.error(`Помилка при видаленні студента з ID ${id}:`, error);
+        alert(`Помилка при видаленні студента з ID ${id}: ${error.message}`);
+    }
 }
-function loadAndRenderStudents() {
-    getStudents()
-        .then(students => {
-            renderStudents(students);
-        })
-        .catch(error => {
-            console.error('Помилка при завантаженні студентів:', error);
-            studentsTableBody.innerHTML = '<tr><td colspan="9">Не вдалося завантажити дані студентів.</td></tr>';
-        });
+async function loadAndRenderStudents() {
+    try {
+        const students = await getStudents(); 
+        renderStudents(students);
+    } catch (error) {
+        console.error('Помилка при завантаженні студентів:', error);
+        studentsTableBody.innerHTML = '<tr><td colspan="9">Не вдалося завантажити дані студентів.</td></tr>';
+    }
 }
 getStudentsBtn.addEventListener('click', loadAndRenderStudents);
 addStudentForm.addEventListener('submit', addStudent);
